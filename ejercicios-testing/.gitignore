@@ -1,0 +1,38 @@
+# Node modules
+node_modules/
+
+# Coverage reports
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Jest coverage
+coverage-final.json
+lcov.info
+clover.xml
+
+# VS Code settings
+.vscode/
+
+# Env files
+.env
+.env.*
+
+# Mac system files
+.DS_Store
+
+# Windows system files
+Thumbs.db
+
+# Exclude all coverage report files and folders
+coverage/
+coverage-*
+
+# Exclude all test output
+*.test-results.json
+
+# Exclude all by default (uncomment to use)
+# *
