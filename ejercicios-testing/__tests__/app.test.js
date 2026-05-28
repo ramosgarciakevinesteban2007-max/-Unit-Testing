@@ -9,116 +9,394 @@ beforeEach(() => {
   resetContacts();
 });
 
-describe('Contacts API', () => {
+describe('API CONTACTS EXTENDIDA', () => {
 
-  test('GET /api/contacts devuelve status 200 y un array', async () => {
+  // ======================================================
+  // BLOQUE A - VALIDACIÓN REGEX EMAIL
+  // ======================================================
 
-    const res = await request(app)
-      .get('/api/contacts');
+  describe('Validación de email', () => {
 
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-  });
+    test('Devuelve 400 cuando email es "@"', async () => {
 
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: '@'
+        });
 
-  test('GET /api/contacts/:id devuelve el contacto correcto', async () => {
-
-    const res = await request(app)
-      .get('/api/contacts/1');
-
-    expect(res.status).toBe(200);
-
-    expect(res.body).toMatchObject({
-      id: 1,
-      name: 'Kevin'
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
     });
-  });
 
+    test('Devuelve 400 cuando email es "usuario@"', async () => {
 
-  test('GET /api/contacts/:id devuelve 404', async () => {
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: 'usuario@'
+        });
 
-    const res = await request(app)
-      .get('/api/contacts/999');
-
-    expect(res.status).toBe(404);
-  });
-
-
-  test('POST /api/contacts crea contacto', async () => {
-
-    const res = await request(app)
-      .post('/api/contacts')
-      .send({
-        name: 'Carlos',
-        email: 'carlos@gmail.com',
-        phone: '3200000000'
-      });
-
-    expect(res.status).toBe(201);
-
-    expect(res.body).toMatchObject({
-      name: 'Carlos',
-      email: 'carlos@gmail.com'
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
     });
-  });
 
+    test('Devuelve 400 cuando email es "@dominio.com"', async () => {
 
-  test('POST devuelve 400 si falta name', async () => {
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: '@dominio.com'
+        });
 
-    const res = await request(app)
-      .post('/api/contacts')
-      .send({
-        email: 'correo@gmail.com'
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+    });
+
+    test('Devuelve 400 cuando email no tiene arroba', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: 'sin-arroba'
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+    });
+
+    test('Devuelve 201 cuando email es válido', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: 'usuario@dominio.com'
+        });
+
+      expect(res.status).toBe(201);
+
+      expect(res.body).toMatchObject({
+        name: 'Test',
+        email: 'usuario@dominio.com'
       });
+    });
 
-    expect(res.status).toBe(400);
   });
 
 
-  test('POST devuelve 400 si email es inválido', async () => {
+  // ======================================================
+  // BLOQUE B - EMAIL DUPLICADO
+  // ======================================================
 
-    const res = await request(app)
-      .post('/api/contacts')
-      .send({
-        name: 'Pedro',
-        email: 'correo-invalido'
-      });
+  describe('Detección de emails duplicados', () => {
 
-    expect(res.status).toBe(400);
+    test('Crear contacto con email existente devuelve 409', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Nuevo',
+          email: 'ana@example.com'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+    test('409 contiene campo error', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Nuevo',
+          email: 'ana@example.com'
+        });
+
+      expect(res.body).toHaveProperty('error');
+    });
+
+    test('Email duplicado en mayúsculas también devuelve 409', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Nuevo',
+          email: 'ANA@EXAMPLE.COM'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+    test('Después del 409 la cantidad de contactos no cambia', async () => {
+
+      await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Nuevo',
+          email: 'ana@example.com'
+        });
+
+      const listRes = await request(app)
+        .get('/api/contacts');
+
+      expect(listRes.body).toHaveLength(3);
+    });
+
   });
 
 
-  test('PUT actualiza correctamente', async () => {
+  // ======================================================
+  // BLOQUE C - SEARCH Y FILTER
+  // ======================================================
 
-    const res = await request(app)
-      .put('/api/contacts/1')
-      .send({
-        phone: '999999999'
-      });
+  describe('Búsqueda y filtros', () => {
 
-    expect(res.status).toBe(200);
+    test('?search=ana devuelve coincidencias', async () => {
 
-    expect(res.body.phone).toBe('999999999');
+      const res = await request(app)
+        .get('/api/contacts')
+        .query({ search: 'ana' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+
+      expect(res.body[0].name).toMatch(/ana/i);
+    });
+
+    test('?search=ANA funciona igual', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts')
+        .query({ search: 'ANA' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+    });
+
+    test('?search=example filtra por email', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts')
+        .query({ search: 'example' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(3);
+    });
+
+    test('?search=xyznoexiste devuelve array vacío', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts')
+        .query({ search: 'xyznoexiste' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    test('?favorite=true devuelve solo favoritos', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts')
+        .query({ favorite: 'true' });
+
+      expect(res.status).toBe(200);
+
+      expect(
+        res.body.every(c => c.favorite === true)
+      ).toBe(true);
+
+      expect(res.body).toHaveLength(1);
+    });
+
+    test('Sin query params devuelve todos', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(3);
+    });
+
   });
 
 
-  test('DELETE elimina contacto', async () => {
+  // ======================================================
+  // BLOQUE D - PATCH FAVORITE
+  // ======================================================
 
-    const res = await request(app)
-      .delete('/api/contacts/1');
+  describe('PATCH favorite toggle', () => {
 
-    expect(res.status).toBe(200);
+    test('Ana pasa de false a true', async () => {
 
-    expect(res.body.message).toMatch(/eliminado/i);
+      const res = await request(app)
+        .patch('/api/contacts/1/favorite');
+
+      expect(res.status).toBe(200);
+      expect(res.body.favorite).toBe(true);
+    });
+
+    test('Doble toggle vuelve a false', async () => {
+
+      await request(app)
+        .patch('/api/contacts/1/favorite');
+
+      await request(app)
+        .patch('/api/contacts/1/favorite');
+
+      const res = await request(app)
+        .get('/api/contacts/1');
+
+      expect(res.body.favorite).toBe(false);
+    });
+
+    test('Luis pasa de true a false', async () => {
+
+      const res = await request(app)
+        .patch('/api/contacts/2/favorite');
+
+      expect(res.body.favorite).toBe(false);
+    });
+
+    test('PATCH devuelve 404 para ID inexistente', async () => {
+
+      const res = await request(app)
+        .patch('/api/contacts/999/favorite');
+
+      expect(res.status).toBe(404);
+    });
+
+    test('El cambio persiste después del PATCH', async () => {
+
+      await request(app)
+        .patch('/api/contacts/1/favorite');
+
+      const res = await request(app)
+        .get('/api/contacts/1');
+
+      expect(res.body.favorite).toBe(true);
+    });
+
   });
 
 
-  test('DELETE devuelve 404', async () => {
+  // ======================================================
+  // BLOQUE E - PUT MEJORADO
+  // ======================================================
 
-    const res = await request(app)
-      .delete('/api/contacts/999');
+  describe('PUT actualizado', () => {
 
-    expect(res.status).toBe(404);
+    test('Actualizar solo el name devuelve 200', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          name: 'Ana Nueva'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('Ana Nueva');
+    });
+
+    test('PUT con email inválido devuelve 400', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          email: 'correo-malo'
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('PUT con email duplicado devuelve 409', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          email: 'luis@example.com'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+    test('PUT con mismo email actual devuelve 200', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          email: 'ana@example.com'
+        });
+
+      expect(res.status).toBe(200);
+    });
+
+    test('PUT en ID inexistente devuelve 404', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/999')
+        .send({
+          name: 'Nuevo'
+        });
+
+      expect(res.status).toBe(404);
+    });
+
+  });
+
+
+  // ======================================================
+  // BLOQUE F - MIDDLEWARE ERROR
+  // ======================================================
+
+  describe('Middleware de errores', () => {
+
+    test('Ruta inexistente devuelve 404 JSON', async () => {
+
+      const res = await request(app)
+        .get('/api/ruta-que-no-existe')
+        .expect('Content-Type', /json/);
+
+      expect(res.status).toBe(404);
+    });
+
+    test('404 genérico contiene campo error', async () => {
+
+      const res = await request(app)
+        .get('/api/ruta-que-no-existe');
+
+      expect(res.body).toHaveProperty('error');
+    });
+
+    test('Errores contienen campo status', async () => {
+
+      const res404 = await request(app)
+        .get('/api/contacts/9999');
+
+      expect(res404.body).toHaveProperty('status', 404);
+
+      const res400 = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: '',
+          email: 'correo'
+        });
+
+      expect(res400.body).toHaveProperty('status', 400);
+
+      const res409 = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: 'ana@example.com'
+        });
+
+      expect(res409.body).toHaveProperty('status', 409);
+    });
+
   });
 
 });
